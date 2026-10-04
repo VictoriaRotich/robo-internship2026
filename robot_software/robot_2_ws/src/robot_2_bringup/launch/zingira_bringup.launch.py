@@ -7,9 +7,10 @@ from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     RegisterEventHandler,
+    TimerAction,
 )
 from launch.conditions import IfCondition
-from launch.event_handlers import OnProcessStart
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -102,13 +103,22 @@ def generate_launch_description():
     )
 
     # -----------------------------
-    # 2. LiDAR (starts after controller_manager comes up)
+    # 2. LiDAR
     # -----------------------------
+    # Intermittently fails at startup with "Can not start scan: 80008002"
+    # (SDK operation timeout) and exits with code 255. Two mitigations:
+    #   - respawn=True: relaunch the node automatically after it dies.
+    #     By the 2nd try the motor has usually spun up and it connects.
+    #   - it is started only AFTER the controllers are up (see sequencing
+    #     below), so the Arduino reset, controller loading and slam_toolbox
+    #     are not competing for CPU/USB power at the same instant.
     lidar_node = Node(
         package='rplidar_ros',
         executable='rplidar_composition',
         namespace='robot_2',
         output='screen',
+        respawn=True,
+        respawn_delay=3.0,
         parameters=[{
             'serial_port': '/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0',
             'serial_baudrate': 115200,
@@ -119,7 +129,7 @@ def generate_launch_description():
     )
 
     # -----------------------------
-    # 3. slam_toolbox (starts after lidar node comes up) - MAPPING ONLY,
+    # 3. slam_toolbox - MAPPING ONLY,
     # only included at all when slam:=true is passed.
     # -----------------------------
     slam_toolbox = IncludeLaunchDescription(
@@ -144,21 +154,23 @@ def generate_launch_description():
     )
 
     # -----------------------------
-    # Event-based sequencing
+    # Sequencing
     # -----------------------------
-    start_lidar_after_controller_manager = RegisterEventHandler(
-        OnProcessStart(
-            target_action=controller_manager,
-            on_start=[lidar_node],
-        )
-    )
-
-    # slam_toolbox's own IfCondition above means this simply no-ops
-    # when slam:=false - no separate condition needed here.
-    start_slam_after_lidar = RegisterEventHandler(
-        OnProcessStart(
-            target_action=lidar_node,
-            on_start=[slam_toolbox],
+    # The joint_broad spawner is the last thing to finish during startup, so
+    # its exit means the hardware interface and controllers are fully up.
+    # Then: wait 2 s, start the lidar; wait a further 6 s, start slam_toolbox.
+    #
+    # slam_toolbox is started on a timer rather than via OnProcessStart on
+    # the lidar node: with respawn=True, OnProcessStart would fire again on
+    # every lidar restart and try to launch a second slam_toolbox.
+    # slam_toolbox's IfCondition makes this a no-op when slam:=false.
+    start_lidar_and_slam = RegisterEventHandler(
+        OnProcessExit(
+            target_action=joint_broad_spawner,
+            on_exit=[
+                TimerAction(period=2.0, actions=[lidar_node]),
+                TimerAction(period=8.0, actions=[slam_toolbox]),
+            ],
         )
     )
 
@@ -169,8 +181,7 @@ def generate_launch_description():
             controller_manager,
             diff_drive_spawner,
             joint_broad_spawner,
-            start_lidar_after_controller_manager,
-            start_slam_after_lidar,
+            start_lidar_and_slam,
         ]
     )
 
