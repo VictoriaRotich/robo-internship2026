@@ -12,6 +12,11 @@
     joint_broad:
       type: joint_state_broadcaster/JointStateBroadcaster
 
+    # Servo open/close. Commands the "servo/open" interface exported
+    # by robot_2_hardware (1.0 = open fully, 0.0 = closed).
+    servo_controller:
+      type: forward_command_controller/ForwardCommandController
+
 /robot_2/diff_cont:
   ros__parameters:
     publish_rate: 50.0
@@ -38,3 +43,11 @@
     right_wheel_names: ['front_right_wheel_joint', 'back_right_wheel_joint']
     wheel_separation: 0.3
     wheel_radius: 0.0425
+
+/robot_2/servo_controller:
+  ros__parameters:
+    # "servo" is the <gpio> name in ros2_control.xacro; the command
+    # interface claimed is servo/open.
+    joints:
+      - servo
+    interface_name: open

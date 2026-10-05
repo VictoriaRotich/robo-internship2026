@@ -108,6 +108,11 @@ private:
     double left_velocity,
     double right_velocity);
 
+  // Servo ('g' = open fully, 'h' = close). The firmware sends no
+  // reply, so the serial stream stays clean. Only called when the
+  // requested state changes (see write()).
+  bool sendServoCommand(bool open);
+
 
   // ==========================================================
   // CONVERSIONS
@@ -180,6 +185,22 @@ private:
   std::vector<double> imu_state_;
 
   std::vector<std::string> imu_interface_names_;
+
+
+  // ==========================================================
+  // SERVO (declared in the URDF as a <gpio> with one command
+  // interface named "open")
+  // ==========================================================
+
+  bool servo_enabled_{false};
+
+  std::string servo_name_;
+
+  // 1.0 = open, 0.0 = closed (threshold 0.5)
+  double servo_command_{0.0};
+
+  // Last state actually sent to the Arduino (false = closed)
+  bool servo_open_sent_{false};
 
 
   // ==========================================================

@@ -50,6 +50,10 @@
         need its own IMU sensor plugin/gazebo sensor tag wired up
         separately if simulated IMU data is wanted later. Not added
         now since the real robot's IMU was the immediate goal.
+
+        NOTE: no servo GPIO here either. The servo is real-robot only
+        for now, and servo_controller is only configured in
+        my_controllers_real.yaml, so sim launches are unaffected.
       -->
 
     </ros2_control>
@@ -156,6 +160,20 @@
         <state_interface name="linear_acceleration.y"/>
         <state_interface name="linear_acceleration.z"/>
       </sensor>
+
+      <!--
+        Servo (signal on Arduino pin 11). Exposed as a GPIO, NOT a
+        joint, because on_init() requires exactly 4 wheel joints.
+        Command interface "open": 1.0 = open fully (firmware 'g'),
+        0.0 = closed (firmware 'h'); threshold 0.5. The firmware sends
+        no servo feedback, so there is no state interface.
+        Removing this <gpio> block entirely is safe:
+        robot_2_system.cpp treats the servo as optional and skips it
+        if info_.gpios is empty.
+      -->
+      <gpio name="servo">
+        <command_interface name="open"/>
+      </gpio>
 
     </ros2_control>
 

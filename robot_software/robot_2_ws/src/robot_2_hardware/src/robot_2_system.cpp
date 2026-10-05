@@ -135,6 +135,43 @@ hardware_interface::CallbackReturn Robot2System::on_init(
       "No IMU sensor declared in URDF - skipping IMU support");
   }
 
+  // ----------------------------------------------------------
+  // Servo (optional <gpio> with one "open" command interface)
+  // ----------------------------------------------------------
+
+  if (!info_.gpios.empty()) {
+
+    const auto & servo = info_.gpios.front();
+
+    if (servo.command_interfaces.size() != 1 ||
+        servo.command_interfaces[0].name != "open")
+    {
+      RCLCPP_ERROR(
+        rclcpp::get_logger("robot_2_hardware"),
+        "GPIO '%s' must have exactly one command interface named 'open'",
+        servo.name.c_str());
+
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+
+    servo_name_ = servo.name;
+    servo_command_ = 0.0;
+    servo_open_sent_ = false;
+    servo_enabled_ = true;
+
+    RCLCPP_INFO(
+      rclcpp::get_logger("robot_2_hardware"),
+      "Servo '%s' configured", servo_name_.c_str());
+
+  } else {
+
+    servo_enabled_ = false;
+
+    RCLCPP_INFO(
+      rclcpp::get_logger("robot_2_hardware"),
+      "No servo GPIO declared in URDF - skipping servo support");
+  }
+
   device_ = getStringParameter(
     "device",
     "/dev/ttyACM0");
@@ -294,6 +331,19 @@ hardware_interface::CallbackReturn Robot2System::on_activate(
     imu_state_[3] = 1.0;
   }
 
+  if (servo_enabled_) {
+    // Firmware boots with the servo closed. Send 'h' explicitly so
+    // ROS and the Arduino agree even after a ROS-only restart.
+    servo_command_ = 0.0;
+    servo_open_sent_ = false;
+
+    if (!sendServoCommand(false)) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("robot_2_hardware"),
+        "Failed to send servo close command during activation");
+    }
+  }
+
   previous_left_ticks_ = 0;
   previous_right_ticks_ = 0;
   first_read_ = true;
@@ -375,6 +425,13 @@ Robot2System::export_command_interfaces()
       joint_names_[i],
       hardware_interface::HW_IF_VELOCITY,
       &hw_commands_[i]);
+  }
+
+  if (servo_enabled_) {
+    command_interfaces.emplace_back(
+      servo_name_,
+      "open",
+      &servo_command_);
   }
 
   return command_interfaces;
@@ -570,6 +627,28 @@ hardware_interface::return_type Robot2System::write(
       "Failed to send motor command");
 
     return hardware_interface::return_type::ERROR;
+  }
+
+  // ----------------------------------------------------------
+  // Servo: only send on a change, not every cycle
+  // ----------------------------------------------------------
+
+  if (servo_enabled_ && !std::isnan(servo_command_)) {
+
+    const bool want_open = servo_command_ > 0.5;
+
+    if (want_open != servo_open_sent_) {
+
+      if (sendServoCommand(want_open)) {
+        servo_open_sent_ = want_open;
+      } else {
+        // Not marked as sent, so it retries on the next cycle.
+        RCLCPP_WARN_THROTTLE(
+          rclcpp::get_logger("robot_2_hardware"),
+          *get_clock(), 2000,
+          "Failed to send servo command");
+      }
+    }
   }
 
   return hardware_interface::return_type::OK;
@@ -964,6 +1043,21 @@ bool Robot2System::sendMotorCommand(
 
   return writeSerial(
     command.str());
+}
+
+
+// ============================================================
+// SEND SERVO COMMAND
+//
+// Arduino commands (no reply):
+//
+// g  -> open servo fully
+// h  -> close servo
+// ============================================================
+
+bool Robot2System::sendServoCommand(bool open)
+{
+  return writeSerial(open ? "g\n" : "h\n");
 }
 
 
