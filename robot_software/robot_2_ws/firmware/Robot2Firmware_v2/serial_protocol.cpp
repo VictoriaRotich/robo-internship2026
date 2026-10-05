@@ -4,6 +4,7 @@
 #include "pid_controller.h"
 #include "watchdog.h"
 #include "imu_driver.h"
+#include "servo_driver.h"
 
 String inputString = "";
 bool commandReady = false;
@@ -187,7 +188,27 @@ void processCommand(char command, float arg1, float arg2, float arg3)
             leftPID.reset();
             rightPID.reset();
             break;
-            
+
+        case 'v':
+            // Set servo to an arbitrary angle in degrees: "v 90".
+            // Does NOT reset the watchdog and is NOT stopped by it:
+            // the watchdog exists to halt the drive motors, and a
+            // servo should simply hold its position.
+            servoSetAngle((int)arg1);
+            break;
+
+        case 'g':
+            // Open the servo fully (SERVO_OPEN_ANGLE in config.h).
+            // No arguments. Same watchdog behaviour as 'v'.
+            servoOpen();
+            break;
+
+        case 'h':
+            // Close the servo (SERVO_CLOSED_ANGLE in config.h).
+            // No arguments. Same watchdog behaviour as 'v'.
+            servoClose();
+            break;
+
         case 'b':
             // Combined encoder + IMU query, matching
             // Robot2System::requestCombined() on the ROS side. See

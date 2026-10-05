@@ -6,6 +6,7 @@
 #include "serial_protocol.h"
 #include "watchdog.h"
 #include "imu_driver.h"
+#include "servo_driver.h"
 
 /*
 ================================================
@@ -47,6 +48,13 @@ void setup()
       clean.
     */
     imu.begin();
+
+    /*
+      Initialize servo AFTER the IMU. Attaching the servo drives it to
+      its closed position, and that movement (and its current spike)
+      would add vibration/noise during the IMU's gyro calibration.
+    */
+    servoBegin();
 
     /*
       Initial PID tuning.
@@ -124,7 +132,8 @@ void loop()
       If Raspberry Pi stops sending motion commands ('m' or 'o'),
       stop robot. Note: querying encoders ('e') or the IMU ('i') does
       NOT reset this timer, so a dead teleop link is caught even if
-      sensor polling keeps running.
+      sensor polling keeps running. The servo is deliberately not
+      affected: it holds its last position.
     */
     if (watchdogExpired())
     {

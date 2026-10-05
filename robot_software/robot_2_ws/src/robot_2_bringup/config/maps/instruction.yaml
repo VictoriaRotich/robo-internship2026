@@ -1,7 +1,7 @@
-image: instruction_room_map.pgm
+image: instruction.pgm
 mode: trinary
 resolution: 0.050
-origin: [-3.828, -10.930, 0]
+origin: [-6.060, -13.088, 0]
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196

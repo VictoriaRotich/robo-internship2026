@@ -45,12 +45,25 @@
 
 /*
 ================================================
- RESERVED
+ SERVO
 ================================================
-*/
+ Signal = pin 11.
+ VCC = buck converter rail (NOT the Arduino 5V pin - servo
+       start/stall current can brown out the Uno and corrupt
+       encoder/IMU reads).
+ GND = common ground with everything else.
 
-// Future servo
-#define SERVO_PIN 11
+ Servo library note (Uno): it uses Timer1, which disables
+ analogWrite() on pins 9 and 10. Those are only RIGHT_IN1/IN2
+ (digital direction) here, so nothing breaks. Never move a PWM
+ speed pin to 9 or 10.
+*/
+#define SERVO_PIN            11
+#define SERVO_CLOSED_ANGLE   0     // boot position / "closed"
+#define SERVO_OPEN_ANGLE     180   // "fully open". Reduce if the mechanism
+                                   // hits its end stop before 180.
+#define SERVO_MIN_ANGLE      0
+#define SERVO_MAX_ANGLE      180
 
 /*
 ================================================
